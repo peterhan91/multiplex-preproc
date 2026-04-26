@@ -46,7 +46,11 @@ class OmeTiffReader:
         s0 = self._tf.series[0]
         self.axes = s0.axes
         self.shape = list(s0.shape)
-        if self.axes == "CYX":
+        # CYX is the standard for CODEX/CyCIF cubes; YXC for some platforms;
+        # IYX is used by Orion (OME-TIFF where each Channel is stored as a
+        # separate Image / IFD). All three layouts present as a 3D ndarray
+        # (channels-first or channels-last) and behave identically for crops.
+        if self.axes in ("CYX", "IYX"):
             self.C, self.H, self.W = self.shape
             self._axis_order = "CYX"
         elif self.axes == "YXC":

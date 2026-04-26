@@ -123,8 +123,15 @@ def patient_id_from_codex(codex_filename: str, dc: DatasetConfig | None = None) 
         stem = name.split(".ome.tif")[0]
     else:
         stem = Path(name).stem
-    parts = stem.split("_")
     cfg_idx = dc.section("index")
+    # NEW: regex applied to the post-extension stem to strip a filename suffix
+    # that isn't part of the sample id (e.g. '-orion$' to map
+    # 'CRC33_01-orion' → 'CRC33_01' for Orion cubes that share a sample dir
+    # with separate H&E files like 'CRC33_01-he.ome.tif').
+    strip_filename_suffix_re = cfg_idx.get("patient_id_strip_filename_suffix_re")
+    if strip_filename_suffix_re:
+        stem = re.sub(strip_filename_suffix_re, "", stem)
+    parts = stem.split("_")
     strip_suffixes = cfg_idx.get("patient_id_strip_suffixes") or []
     strip_ver_re = cfg_idx.get("patient_id_strip_version_re")
     if parts and parts[-1] in set(strip_suffixes):
