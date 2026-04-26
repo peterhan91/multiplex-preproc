@@ -1,0 +1,73 @@
+# Dataset config — Greenwald 2024 *Cell* GBM CODEX + paired H&E
+# Source of truth + provenance: README.md (project root) + paper/mmc1.pdf Table S3
+# + preproc/greenwald-gbm-codex/qupath_v2/CODEX_qupath_project/data/<id>/server.json
+
+dataset_id: greenwald-gbm-codex
+modality: codex                        # codex | cycif | phenocycler | orion | imc | mibi
+description: |
+  Greenwald 2024 GBM CODEX (12 patients) + paired H&E from same tissue blocks.
+  43-channel Akoya CODEX panel (DAPI + 14 cycles × Atto550/AF488/AF647 minus blanks).
+
+paths:
+  raw_subdir: greenwald-gbm-codex
+  preproc_subdir: greenwald-gbm-codex
+
+unpack:
+  archives:
+    - src: HE_scans.zip
+      dst: he_raw
+      type: zip
+    - src: CODEX_organoid_qupath_project.zip
+      dst: qupath_organoid
+      type: zip
+    - src: CODEX_qupath_project_v2.zip
+      dst: qupath_v2
+      type: zip-metadata          # extract only project.qpproj + */server.json + */summary.json
+      include_suffixes: ["project.qpproj", "server.json", "summary.json"]
+  visium_glob: "GBM_*.tar.gz"     # untar each match into preproc/visium/<stem>/
+
+index:
+  codex_glob: "*.ome.tif"
+  he_subdir: he_raw
+  he_suffixes: [".tif", ".tiff", ".svs", ".ndpi", ".mrxs"]
+  patient_id_strip_suffixes: ["B", "A"]     # last underscore-separated token; ZH1041_T1_B → ZH1041_T1
+  patient_id_strip_version_re: '^v\d+$'     # also strip _v6 etc.
+
+reference_channel:
+  # Used by 02_thumbs to build the registration thumbnail.
+  match_any: ["DAPI", "Hoechst", "DNA", "nuc"]
+  fallback_index: 0
+
+he_grayscale:
+  # How to convert H&E RGB → single-channel for nuclear-pattern registration.
+  method: invert_value             # 1 - V(HSV); makes hematoxylin-rich nuclei bright
+
+registration:
+  strategy: affine_loftr           # affine_loftr | identity (same-section) | affine_orb
+  thumb_target_downsample: 32
+  loftr_max_side: 1024
+  ransac_residual_px: 4.0
+  min_inliers: 8
+
+panel:
+  source: qupath_v2                # qupath_v2 | csv | inline | greenwald43-constant
+  qupath_project_path: qupath_v2/CODEX_qupath_project   # relative to preproc/<dataset>/
+  qupath_image_name_strip_suffixes: ["_A", "_B"]
+  qupath_image_name_strip_version_re: '_v\d+$'
+  fallback_constant: greenwald43   # registry key in scripts/panels.py
+
+panel_verify:
+  expected_dapi_at_index_0: true
+  expected_total_channels: 43
+  cycle_structure_constant: greenwald43_cycles  # registry key in scripts/panels.py
+
+patchify:
+  patch_px: 512
+  stride_px: 512
+  tissue_frac_min: 0.35
+  max_patches_per_slide: 256
+  preview_grid: 8
+  storage:
+    he_dtype: uint8
+    codex_dtype: uint8             # source uint8; warp output rounded back
+    compression: lzf

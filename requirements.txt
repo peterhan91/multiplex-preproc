@@ -1,0 +1,20 @@
+# Preprocessing pipeline deps. CPU baseline; GPU is optional and probed at runtime.
+tifffile>=2024.7
+zarr>=3.0
+numpy>=1.26
+scipy>=1.11
+scikit-image>=0.22
+Pillow>=10.0
+h5py>=3.10
+imagecodecs>=2024.6   # required by tifffile for JPEG/JP2K-encoded WSI tiles
+
+pyyaml>=6.0           # dataset config loading
+
+# Optional GPU acceleration (stock pip torch wheels work on aarch64 + CUDA 13):
+# torch
+# kornia>=0.7
+
+# Optional modality-specific (install only when needed):
+# readimc>=0.9        # IMC (.mcd parsing) — also needs `pandas` (undeclared transitive dep)
+# pandas              # readimc transitive dep
+# napari[all]         # interactive QC viewer (qc_napari.py)

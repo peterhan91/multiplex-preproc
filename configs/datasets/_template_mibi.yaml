@@ -1,0 +1,59 @@
+# TEMPLATE — MIBI-TOF (IONpath)
+# Copy to <dataset_id>.yaml and edit values marked TODO.
+
+dataset_id: TODO-dataset-id
+modality: mibi
+description: |
+  TODO short description (cohort, n patients, paired H&E source).
+
+paths:
+  raw_subdir: TODO-dataset-id
+  preproc_subdir: TODO-dataset-id
+
+unpack:
+  archives: []
+  visium_glob: null
+
+index:
+  cube_glob: "*"                    # MIBI is a directory-per-ROI of per-channel TIFFs
+  cube_format: per-channel-tiff-dir # per-channel-tiff-dir | multitiff
+  channel_filename_re: '^(.+)\.tiff?$'   # filename → channel/marker name
+  he_subdir: he_raw
+  he_suffixes: [".tif", ".tiff", ".svs", ".ndpi"]
+  patient_id_strip_suffixes: []
+  patient_id_strip_version_re: null
+
+reference_channel:
+  # MIBI has no DAPI — uses dsDNA (Histone H3 in some panels) as nuclear ref.
+  match_any: ["dsDNA", "Histone", "HistoneH3", "H3"]
+  fallback_index: 0
+
+he_grayscale:
+  method: invert_value
+
+registration:
+  strategy: affine_loftr            # MIBI ROIs are small (~500 µm) — LoFTR may struggle
+  thumb_target_downsample: 4        # smaller downsample given small ROI
+  loftr_max_side: 1024
+  ransac_residual_px: 4.0
+  min_inliers: 8
+
+panel:
+  source: filename                  # MIBI: each TIFF filename IS the marker name
+  fallback_csv: null
+
+panel_verify:
+  expected_dapi_at_index_0: false
+  expected_total_channels: null
+  cycle_structure_constant: null
+
+patchify:
+  patch_px: 512
+  stride_px: 512
+  tissue_frac_min: 0.35
+  max_patches_per_slide: 256
+  preview_grid: 8
+  storage:
+    he_dtype: uint8
+    codex_dtype: float32            # MIBI ion counts; same as IMC
+    compression: lzf

@@ -1,0 +1,28 @@
+# raw + processed data — large and reproducible from configs
+raw/
+preproc/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# os
+.DS_Store
+Thumbs.db
+
+# logs / temp
+*.log
+*.tmp
+
+# downloaded paper PDFs (large, copyrighted) — keep paper/ in tree but skip binaries
+paper/*.pdf
+paper/*.xlsx
+download.log

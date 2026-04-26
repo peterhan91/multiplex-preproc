@@ -1,0 +1,60 @@
+# TEMPLATE — Imaging Mass Cytometry (Hyperion / Standard BioTools)
+# Copy to <dataset_id>.yaml and edit values marked TODO.
+# Requires: pip install readimc (for .mcd parsing)
+
+dataset_id: TODO-dataset-id
+modality: imc
+description: |
+  TODO short description (cohort, n patients, paired H&E source).
+
+paths:
+  raw_subdir: TODO-dataset-id
+  preproc_subdir: TODO-dataset-id
+
+unpack:
+  archives: []
+  visium_glob: null
+
+index:
+  cube_glob: "*.mcd"                # IMC native format; can also be per-channel TIFFs
+  cube_format: mcd                  # mcd | per-channel-tiff
+  he_subdir: he_raw
+  he_suffixes: [".tif", ".tiff", ".svs", ".ndpi"]
+  patient_id_strip_suffixes: []
+  patient_id_strip_version_re: null
+
+reference_channel:
+  # IMC has no DAPI — DNA is tagged with iridium isotopes.
+  # Channel names from MCD are like "DNA1(Ir191Di)", "DNA2(Ir193Di)".
+  match_any: ["Ir191", "Ir193", "DNA1", "DNA2", "Iridium"]
+  fallback_index: 0
+
+he_grayscale:
+  method: invert_value
+
+registration:
+  strategy: affine_loftr
+  thumb_target_downsample: 32
+  loftr_max_side: 1024
+  ransac_residual_px: 4.0
+  min_inliers: 8
+
+panel:
+  source: mcd_metadata              # IMC panels are embedded in the MCD itself
+  fallback_csv: null
+
+panel_verify:
+  expected_dapi_at_index_0: false   # IMC: Iridium not DAPI; relax this
+  expected_total_channels: null
+  cycle_structure_constant: null    # IMC has no fluorophore cycles
+
+patchify:
+  patch_px: 512
+  stride_px: 512
+  tissue_frac_min: 0.35
+  max_patches_per_slide: 256
+  preview_grid: 8
+  storage:
+    he_dtype: uint8
+    codex_dtype: float32            # IMC ion counts have wider dynamic range than CODEX uint8
+    compression: lzf
