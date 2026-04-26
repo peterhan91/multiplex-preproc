@@ -59,13 +59,17 @@ reader + registration strategy.
 .
 ├── README.md                                # this file
 ├── run_pipeline.sh                          # DATASET= env var picks the dataset
-├── configs/datasets/
+├── configs/datasets/                        # production configs — pipeline runs end-to-end
 │   ├── greenwald-gbm-codex.yaml             # reference dataset (CODEX + H&E)
 │   ├── lin-2022-cycif-crc-3d-atlas.yaml     # 2nd validated config (CyCIF, AWS)
+│   ├── lin-2023-orion-crc-sample.yaml       # 3rd validated config (Orion same-section)
 │   ├── _template_codex.yaml
 │   ├── _template_cycif.yaml
 │   ├── _template_imc.yaml
 │   └── _template_mibi.yaml
+├── configs/_validation/                     # reader smoke-tests — pipeline halts partway by design
+│   ├── README.md
+│   └── bodenmiller-covid-imc-sample.yaml    # IMC reader validation (no paired H&E in deposit)
 ├── scripts/
 │   ├── _common.py                           # config-aware path constants + helpers
 │   ├── dataset_config.py                    # YAML loader + schema

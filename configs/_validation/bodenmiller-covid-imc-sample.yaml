@@ -1,3 +1,19 @@
+# VALIDATION-ONLY CONFIG — not a production dataset.
+#
+# This config exists to smoke-test the ImcReader binding against a real
+# Hyperion .mcd file. The pipeline runs through 02_thumbs and then halts:
+# 03_register and 04_patchify skip silently because the deposit has NO
+# paired H&E (and IMC is FOV-based, not WSI — see README "modality status").
+#
+# Use this config when:
+#   - You modified ImcReader / readers.py and want to confirm it still parses
+#     a real MCD and resolves channel labels + ref channel correctly.
+#   - You're adding a new IMC dataset and want a known-working reference.
+#
+# Do NOT copy this as a production template — start from
+# configs/datasets/_template_imc.yaml and pair with real H&E + paired-section
+# IMC ROIs from the same tissue block.
+#
 # Dataset config — Bodenmiller COVID lung IMC SAMPLE (single MCD validation)
 # Source: Zenodo 4637034 — A19_33_20210121_ActivationPanel.mcd (632 MB)
 # Purpose: validate ImcReader against a real Hyperion .mcd file. No paired H&E.

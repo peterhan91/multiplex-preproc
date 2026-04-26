@@ -22,6 +22,9 @@ DEFAULT_DATASET = "greenwald-gbm-codex"
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIGS_DIR = ROOT / "configs" / "datasets"
+# Validation-only configs (reader smoke tests; pipeline doesn't run end-to-end
+# because the deposit lacks paired H&E or full-pipeline applicability).
+VALIDATION_CONFIGS_DIR = ROOT / "configs" / "_validation"
 
 
 @dataclass
@@ -86,16 +89,28 @@ def active_dataset_id() -> str:
 
 
 def load_config(dataset_id: str | None = None) -> DatasetConfig:
+    """Load a dataset config by id.
+
+    Search order:
+      1. configs/datasets/<id>.yaml   (production datasets — full pipeline)
+      2. configs/_validation/<id>.yaml (reader / smoke-test only — pipeline
+         partial because the deposit lacks paired H&E or otherwise can't
+         exercise the full register/patchify path)
+    """
     did = dataset_id or active_dataset_id()
-    fp = CONFIGS_DIR / f"{did}.yaml"
-    if not fp.exists():
-        raise SystemExit(
-            f"dataset config not found: {fp}\n"
-            f"Available: {sorted(p.stem for p in CONFIGS_DIR.glob('*.yaml') if not p.stem.startswith('_'))}"
-        )
-    raw = yaml.safe_load(fp.read_text())
-    cfg = _validate(raw, fp)
-    return DatasetConfig(raw=raw, cfg=cfg)
+    for d in (CONFIGS_DIR, VALIDATION_CONFIGS_DIR):
+        fp = d / f"{did}.yaml"
+        if fp.exists():
+            raw = yaml.safe_load(fp.read_text())
+            cfg = _validate(raw, fp)
+            return DatasetConfig(raw=raw, cfg=cfg)
+    available_prod = sorted(p.stem for p in CONFIGS_DIR.glob("*.yaml") if not p.stem.startswith("_"))
+    available_val  = sorted(p.stem for p in VALIDATION_CONFIGS_DIR.glob("*.yaml")) if VALIDATION_CONFIGS_DIR.exists() else []
+    raise SystemExit(
+        f"dataset config not found for id {did!r}\n"
+        f"Production configs:    {available_prod}\n"
+        f"Validation-only configs: {available_val}"
+    )
 
 
 def _validate(raw: dict, fp: Path) -> dict:
