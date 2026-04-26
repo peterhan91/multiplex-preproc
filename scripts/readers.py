@@ -151,11 +151,16 @@ class ImcReader:
             )
         acq = self._acqs[acquisition_index]
         self._acq = acq
-        # Channel labels (e.g. 'Ir191Di') and human-readable names (antibodies)
+        # readimc convention (verified 2026-04-26 against a real Bodenmiller
+        # COVID MCD): `acq.channel_labels` holds the antibody / target name
+        # when stained (e.g. 'HistoneH3', 'DNA1', 'CD45') and a bare metal
+        # label (e.g. '80ArAr', '190BCKG') for background channels.
+        # `acq.channel_names` holds raw metal isotope codes (e.g. 'In113',
+        # 'Ir191'). For pipeline use, prefer the antibody label; fall back to
+        # the isotope code only when the label is empty.
         labels = list(acq.channel_labels or [])
         names  = list(acq.channel_names or [])
-        # Prefer human names when set; else fall back to isotope labels.
-        self.channel_names = [n if n else lbl for n, lbl in zip(names, labels)] or labels
+        self.channel_names = [lbl if lbl else nm for lbl, nm in zip(labels, names)] or names
 
         if preload:
             arr = self._fh.read_acquisition(acq)  # returns (C, H, W) float32
@@ -296,19 +301,19 @@ def open_reader(path: Path, modality: str, preload: bool = True):
 # ---------------------------------------------------------------- helpers
 
 def resolve_reference_channel_index(channel_names: list[str], match_any: list[str], fallback_index: int = 0) -> int:
-    """Find the channel whose name matches any of the candidate strings.
+    """Find the channel whose name matches the highest-priority needle.
 
-    Used by 02_thumbs to pick which channel becomes the registration thumbnail.
-    Substring + case-insensitive match. Falls back to `fallback_index` when
-    no match (typical default 0 = first channel).
+    Iterates `match_any` in order and returns the first channel matching the
+    first matching needle (substring + case-insensitive). This lets configs
+    prefer e.g. ``DNA1`` over ``HistoneH3`` even when both are valid nuclear
+    references in the same panel. Falls back to `fallback_index` when nothing
+    matches (default 0 = first channel).
     """
     if not channel_names:
         return fallback_index
-    needles = [m.lower() for m in (match_any or [])]
-    for i, name in enumerate(channel_names):
-        if name is None:
-            continue
-        nl = name.lower()
-        if any(needle in nl for needle in needles):
-            return i
+    for needle in (match_any or []):
+        n = needle.lower()
+        for i, name in enumerate(channel_names):
+            if name and n in name.lower():
+                return i
     return fallback_index

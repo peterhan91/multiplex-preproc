@@ -52,6 +52,7 @@ def _u8(arr: np.ndarray) -> np.ndarray:
 
 
 def thumb_codex(codex_path: Path, ref_idx: int, target_ds: int) -> np.ndarray:
+    """OME-TIFF path — pyramid level near target downsample, then ref channel."""
     with tifffile.TiffFile(codex_path) as tf:
         s0 = tf.series[0]
         if not s0.levels:
@@ -70,6 +71,30 @@ def thumb_codex(codex_path: Path, ref_idx: int, target_ds: int) -> np.ndarray:
         c_axis = int(np.argmin(arr.shape))
         arr = np.take(arr, ref_idx, axis=c_axis)
     return _u8(arr)
+
+
+def thumb_via_reader(codex_path: Path, ref_idx: int, target_ds: int, modality: str) -> np.ndarray:
+    """Modality-aware fallback for non-OME-TIFF cubes (IMC .mcd, MIBI dir).
+
+    Opens via the reader factory, takes the ref channel, downsamples by
+    `target_ds`. The reader loads the full cube into RAM (small for IMC/MIBI
+    ROIs which are typically <1k × 1k px).
+    """
+    from readers import open_reader
+    r = open_reader(codex_path, modality, preload=True)
+    try:
+        full = r._mem[ref_idx]  # (H, W) float32
+    finally:
+        r.close()
+    if target_ds > 1:
+        from PIL import Image as _Im
+        nh = max(1, full.shape[0] // target_ds)
+        nw = max(1, full.shape[1] // target_ds)
+        u8 = _u8(full)
+        thumb = np.asarray(_Im.fromarray(u8).resize((nw, nh), _Im.BILINEAR))
+        log.info("  reader-based thumb (full %s → %s)", full.shape, thumb.shape)
+        return thumb
+    return _u8(full)
 
 
 def thumb_he(he_path: Path, target_ds: int, method: str = "invert_value") -> tuple[np.ndarray, np.ndarray | None]:
@@ -124,7 +149,10 @@ def main() -> int:
                 ref_cfg.get("fallback_index", 0),
             )
             log.info("  ref channel idx=%d (%s)", ref_idx, (codex.get('channels') or [None])[ref_idx])
-            thumb = thumb_codex(codex_path, ref_idx, target_ds)
+            if dc.modality in ("codex", "phenocycler", "cycif", "orion"):
+                thumb = thumb_codex(codex_path, ref_idx, target_ds)
+            else:
+                thumb = thumb_via_reader(codex_path, ref_idx, target_ds, dc.modality)
             Image.fromarray(thumb).save(dc.thumbs_dir / f"{sid}__codex.png")
         except Exception as e:
             log.warning("  CODEX thumb failed: %s", e)

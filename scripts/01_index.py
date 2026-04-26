@@ -159,8 +159,21 @@ def main() -> int:
 
     for codex_path in cube_files:
         sid = patient_id_from_codex(codex_path.name, dc)
-        log.info("indexing CODEX %s (sample_id=%s)", codex_path.name, sid)
-        codex_meta = read_ome_meta(codex_path)
+        log.info("indexing %s cube %s (sample_id=%s)", dc.modality, codex_path.name, sid)
+        # Modality dispatch: OME-TIFF family vs IMC/MIBI (different file format)
+        if dc.modality in ("codex", "phenocycler", "cycif", "orion"):
+            codex_meta = read_ome_meta(codex_path)
+        else:
+            from readers import open_reader
+            r = open_reader(codex_path, dc.modality, preload=False)
+            codex_meta = {
+                "shape": [r.C, r.H, r.W],
+                "axes": getattr(r, "axes", "CYX"),
+                "dtype": "float32",   # both IMC and MIBI normalized to float32 in readers
+                "channels": list(r.channel_names),
+                "pixel_size_um": None,
+            }
+            r.close()
         codex_meta["path"] = str(codex_path.relative_to(ROOT))
         slides.setdefault(sid, {})["codex"] = codex_meta
 

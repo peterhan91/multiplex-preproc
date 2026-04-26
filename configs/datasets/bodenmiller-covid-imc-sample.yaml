@@ -1,0 +1,63 @@
+# Dataset config — Bodenmiller COVID lung IMC SAMPLE (single MCD validation)
+# Source: Zenodo 4637034 — A19_33_20210121_ActivationPanel.mcd (632 MB)
+# Purpose: validate ImcReader against a real Hyperion .mcd file. No paired H&E.
+
+dataset_id: bodenmiller-covid-imc-sample
+modality: imc
+description: |
+  Single MCD from Bodenmiller "spatial landscape of lung pathology during
+  COVID-19 progression" (Zenodo 4637034). 1 slide × 4 acquisitions × 47
+  channels (Hyperion ActivationPanel). Used solely to validate the
+  ImcReader / 02_thumbs / 01b_panels paths against a real Hyperion file.
+
+paths:
+  raw_subdir: bodenmiller-covid-imc-sample
+  preproc_subdir: bodenmiller-covid-imc-sample
+
+unpack:
+  archives: []
+  visium_glob: null
+
+index:
+  cube_glob: "*.mcd"
+  cube_format: mcd
+  he_root_base: raw
+  he_subdir: ""
+  he_suffixes: [".tif", ".tiff", ".svs", ".ndpi"]
+  patient_id_strip_suffixes: []
+  patient_id_strip_version_re: null
+
+reference_channel:
+  # IMC: prefer DNA1 (Ir191) — standard nuclear reference for Hyperion.
+  match_any: ["DNA1", "DNA2", "Ir191", "Ir193", "Iridium", "HistoneH3"]
+  fallback_index: 0
+
+he_grayscale:
+  method: invert_value
+
+registration:
+  strategy: affine_loftr           # will be skipped — no H&E paired
+  thumb_target_downsample: 4       # IMC ROIs are small (~600-1500 px); downsample less
+  loftr_max_side: 1024
+  ransac_residual_px: 4.0
+  min_inliers: 8
+
+panel:
+  source: mcd_metadata             # special marker — handled by 01b_panels
+  fallback_constant: null
+
+panel_verify:
+  expected_dapi_at_index_0: false  # IMC has Iridium, not DAPI; ch0 is usually 80ArAr background
+  expected_total_channels: 47
+  cycle_structure_constant: null   # IMC has no fluorophore cycles
+
+patchify:
+  patch_px: 512
+  stride_px: 512
+  tissue_frac_min: 0.35
+  max_patches_per_slide: 256
+  preview_grid: 8
+  storage:
+    he_dtype: uint8
+    codex_dtype: float32           # IMC ion counts have wider dynamic range
+    compression: lzf

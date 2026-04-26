@@ -202,6 +202,14 @@ def _resolve_panel(sid: str, ome_channels: list[str], dc) -> tuple[list[str] | N
     spec = dc.section("panel")
     source = spec.get("source", "auto")
 
+    # 0) File-embedded metadata (MCD or OME-XML). For IMC/MIBI/MIBI-style cubes
+    # the channel list comes from 01_index reading the file directly — those
+    # names ARE the panel and need no further resolution.
+    if source in ("mcd_metadata", "ome_metadata"):
+        if ome_channels and any(ome_channels):
+            return list(ome_channels), source
+        return None, "unresolved"
+
     # 1) QuPath v2 project
     if source in ("qupath_v2", "auto") and spec.get("qupath_project_path"):
         proj = (dc.preproc_dir / spec["qupath_project_path"]).resolve()

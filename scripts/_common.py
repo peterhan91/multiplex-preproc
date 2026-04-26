@@ -116,7 +116,13 @@ def patient_id_from_codex(codex_filename: str, dc: DatasetConfig | None = None) 
     import re
     dc = dc or _DC
     name = Path(codex_filename).name
-    stem = name.split(".ome.tif")[0]
+    # Strip extension. ".ome.tif" is a double suffix so Path.stem alone leaves
+    # ".ome"; handle that case explicitly. Falls through to Path.stem for other
+    # formats (.mcd, .tiff, .qptiff, etc.).
+    if ".ome.tif" in name:
+        stem = name.split(".ome.tif")[0]
+    else:
+        stem = Path(name).stem
     parts = stem.split("_")
     cfg_idx = dc.section("index")
     strip_suffixes = cfg_idx.get("patient_id_strip_suffixes") or []
