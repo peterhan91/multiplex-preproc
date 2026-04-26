@@ -27,9 +27,11 @@ fetch:
   he_filename_re: '^WD-[0-9]+-[0-9]+\.ome\.tif$'   # H&E shares WD- prefix in CRC1 layout
 
 index:
-  codex_glob: "CRC*.ome.tif"       # CyCIF cubes for CRC2-17
-  he_subdir: he
-  he_suffixes: [".tif", ".tiff", ".ome.tif"]
+  codex_glob: "CRC[0-9][0-9].ome.tif"  # CyCIF cubes for CRC02-17 only (the trailing exact dot+ext excludes CRC13-HE.ome.tif)
+  he_root_base: raw                # H&E sits in raw/<dataset>/ (direct S3 download)
+  he_subdir: ""                    # no extra subdir under raw/<dataset>/
+  he_suffixes: [".tif", ".tiff"]
+  he_filename_re: '-HE\.ome\.tif$' # disambiguate H&E from CyCIF cube (both contain sample id)
   patient_id_strip_suffixes: []
   patient_id_strip_version_re: null
 
@@ -48,14 +50,16 @@ registration:
   min_inliers: 8
 
 panel:
-  source: csv                      # comes from `metadata/CRC202105 HTAN channel metadata.csv` per slide
-  csv_path_pattern: "metadata/CRC202105 HTAN channel metadata.csv"
+  source: csv                      # cohort-level panel CSV (HTAN channel metadata)
+  # Path forms supported: raw://<rel>, preproc://<rel>, /abs/path, or bare relative
+  # (legacy, resolved against preproc/<dataset>/).
+  csv_path: "raw://CRC202105 HTAN channel metadata.csv"
   fallback_constant: null          # no published constant analogue
 
 panel_verify:
-  expected_dapi_at_index_0: true
-  expected_total_channels: null    # variable; inspect first cube
-  cycle_structure_constant: null   # CyCIF panels are dataset-specific
+  expected_dapi_at_index_0: true   # accepts DAPI/Hoechst/DNA at index 0
+  expected_total_channels: 36      # from CRC202105 HTAN channel metadata.csv (verified 2026-04-26)
+  cycle_structure_constant: null   # t-CyCIF panels are study-specific; no published cycle constant
 
 patchify:
   patch_px: 512

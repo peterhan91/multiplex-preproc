@@ -97,15 +97,27 @@ def read_he_meta(path: Path) -> dict:
     return {"format": "unsupported", "suffix": suffix}
 
 
-def discover_he(sample_id: str, he_root: Path, he_suffixes: list[str]) -> Path | None:
+def discover_he(sample_id: str, he_root: Path, he_suffixes: list[str],
+                filename_re: str | None = None) -> Path | None:
+    """Find an H&E file under `he_root` whose stem contains `sample_id`.
+
+    If `filename_re` is given (e.g. `-HE\\.ome\\.tif$`), restrict candidates
+    to filenames matching that regex. Useful when the cube file and the H&E
+    file live in the same directory and share the sample id (e.g. Lin 2022:
+    CRC02.ome.tif + CRC02-HE.ome.tif both match sid 'CRC02' on substring;
+    the regex disambiguates which one is the H&E).
+    """
     if not he_root.exists():
         return None
+    pat = re.compile(filename_re) if filename_re else None
     candidates = []
     sid_norm = sample_id.replace("_", "").lower()
     for p in he_root.rglob("*"):
         if not p.is_file():
             continue
         if p.suffix.lower() not in set(he_suffixes):
+            continue
+        if pat and not pat.search(p.name):
             continue
         if sid_norm in p.stem.replace("_", "").lower():
             candidates.append(p)
@@ -126,7 +138,15 @@ def main() -> int:
     codex_glob = cfg_idx.get("codex_glob") or cfg_idx.get("cube_glob") or "*.ome.tif"
     he_subdir = cfg_idx.get("he_subdir", "he_raw")
     he_suffixes = cfg_idx.get("he_suffixes") or [".tif", ".tiff"]
-    he_root = dc.preproc_dir / he_subdir
+    # he_root_base: where to look for H&E. "preproc" (default) → H&E extracted
+    # into preproc/<dataset>/<he_subdir>/. "raw" → H&E sits alongside cube
+    # files in raw/<dataset>/ (typical for direct cloud-bucket downloads
+    # without a wrapping archive).
+    he_root_base = cfg_idx.get("he_root_base", "preproc")
+    base_dir = dc.preproc_dir if he_root_base == "preproc" else dc.raw_dir
+    he_root = base_dir / he_subdir if he_subdir else base_dir
+    he_filename_re = cfg_idx.get("he_filename_re")
+    log.info("H&E search root: %s  filter_re=%s", he_root, he_filename_re)
 
     # Start each indexing run from a clean slate so stale sids from prior runs
     # (e.g. before a config change) don't linger and cause downstream errors.
@@ -144,7 +164,7 @@ def main() -> int:
         codex_meta["path"] = str(codex_path.relative_to(ROOT))
         slides.setdefault(sid, {})["codex"] = codex_meta
 
-        he_path = discover_he(sid, he_root, he_suffixes)
+        he_path = discover_he(sid, he_root, he_suffixes, he_filename_re)
         if he_path is None:
             log.info("  no matching H&E found for %s", sid)
             slides[sid]["he"] = None

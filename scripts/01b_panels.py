@@ -92,14 +92,48 @@ def _qupath_panel(project_path: Path, entry_id: str) -> list[str] | None:
 
 
 def _csv_panel(csv_path: Path) -> list[str]:
-    """Read marker names from a CSV. Tries common column names."""
+    """Read marker names from a CSV. Handles two flavours:
+
+    1. Simple one-row-per-channel CSVs with a column named one of
+       (marker / name / Channel / Target / Channel Name / Target Name).
+    2. HTAN-style channel metadata CSVs that have a `Channel ID` column with
+       repeated entries when a slot was re-stained or re-controlled (e.g. Lin
+       2022 CRC202105 channel metadata: each Channel:0:N may appear 1-2 times).
+       For those we dedupe by Channel ID, keeping the row whose Target Name is
+       NOT a control IgG (Rat-IgG / Rabbit-IgG / Mouse-IgG / *Control*).
+    """
     with csv_path.open() as f:
         reader = csv.DictReader(f)
         rows = list(reader)
-    for col in ("marker", "Marker", "name", "Name", "channel", "Channel", "Target"):
-        if rows and col in rows[0]:
+    if not rows:
+        raise SystemExit(f"{csv_path}: empty CSV")
+
+    # If there's a Channel ID column, dedupe by it, prefer non-control rows.
+    if "Channel ID" in rows[0]:
+        target_col = "Target Name" if "Target Name" in rows[0] else "Channel Name"
+        is_control = lambda v: any(k in v for k in ("IgG", "Control"))
+        groups: dict[str, list[dict]] = {}
+        for r in rows:
+            cid = r["Channel ID"]
+            groups.setdefault(cid, []).append(r)
+        out: list[str] = []
+        for cid in sorted(groups, key=lambda c: int(c.split(":")[-1])):
+            best = next(
+                (r for r in groups[cid] if not is_control((r.get(target_col) or "").strip())),
+                groups[cid][0],
+            )
+            out.append((best.get(target_col) or "").strip() or cid)
+        return out
+
+    # Generic single-column lookup
+    for col in ("marker", "Marker", "name", "Name", "channel", "Channel",
+                "Target", "Target Name", "Channel Name"):
+        if col in rows[0]:
             return [r[col].strip() for r in rows if r.get(col)]
-    raise SystemExit(f"{csv_path}: cannot find a marker column (tried marker/name/channel/Target)")
+    raise SystemExit(
+        f"{csv_path}: cannot find a marker column (tried marker / name / Channel / Target / "
+        f"Target Name / Channel Name; or a Channel ID column for HTAN-style dedup)"
+    )
 
 
 # ---------------------------------------------------------------- verification
@@ -114,8 +148,13 @@ def _verify(sid: str, markers: list[str], ome_channels: list[str],
         )
     if expected_total is not None and len(markers) != expected_total:
         raise SystemExit(f"{sid}: panel size {len(markers)} != expected_total_channels {expected_total}")
-    if expected_dapi and markers and markers[0] != "DAPI":
-        raise SystemExit(f"{sid}: ch0 must be DAPI, got {markers[0]!r}")
+    if expected_dapi and markers:
+        # Accept any nuclear stain at ch0 — different vendors / studies use
+        # different target/stain names: DAPI, Hoechst, DNA (the bound molecule).
+        if markers[0] not in {"DAPI", "Hoechst", "DNA", "Hoechst 33342", "DNA1", "DNA (1)"}:
+            raise SystemExit(
+                f"{sid}: ch0 expected to be a nuclear stain (DAPI/Hoechst/DNA), got {markers[0]!r}"
+            )
 
     if cycle_key:
         cycles = PANEL_CYCLES.get(cycle_key)
@@ -172,15 +211,30 @@ def _resolve_panel(sid: str, ome_channels: list[str], dc) -> tuple[list[str] | N
             if ml and len(ml) == len(ome_channels):
                 return ml, "qupath_v2"
 
-    # 2) CSV
+    # 2) CSV — supports three path forms:
+    #      raw://foo.csv      → resolved relative to raw/<dataset>/
+    #      preproc://foo.csv  → resolved relative to preproc/<dataset>/
+    #      /abs/path.csv      → absolute
+    #      <relative>         → resolved relative to preproc/<dataset>/ (legacy)
     if source in ("csv", "auto") and spec.get("csv_path"):
-        csv_path = Path(spec["csv_path"])
-        if not csv_path.is_absolute():
-            csv_path = (dc.preproc_dir / csv_path).resolve()
+        raw_str = str(spec["csv_path"])
+        if raw_str.startswith("raw://"):
+            csv_path = (dc.raw_dir / raw_str[len("raw://"):]).resolve()
+        elif raw_str.startswith("preproc://"):
+            csv_path = (dc.preproc_dir / raw_str[len("preproc://"):]).resolve()
+        else:
+            csv_path = Path(raw_str)
+            if not csv_path.is_absolute():
+                csv_path = (dc.preproc_dir / csv_path).resolve()
         if csv_path.exists():
             ml = _csv_panel(csv_path)
             if ml and len(ml) == len(ome_channels):
                 return ml, f"csv:{csv_path.name}"
+            elif ml:
+                log.warning(
+                    "%s: CSV panel size %d != OME channels %d — falling through",
+                    sid, len(ml), len(ome_channels),
+                )
 
     # 3) Inline
     if source == "inline" and spec.get("inline"):
