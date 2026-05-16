@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-imports:
+    name: scripts import on CPU-only env
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install CPU-only deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install readimc pandas  # optional IMC deps so readers.ImcReader imports
+
+      - name: Smoke-test imports
+        env:
+          DATASET: greenwald-gbm-codex
+        run: |
+          fail=0
+          for f in scripts/*.py; do
+            name=$(basename "$f" .py)
+            echo "▸ $name"
+            if ! python -c "import sys; sys.path.insert(0,'scripts'); __import__('${name}')"; then
+              echo "✗ $name failed to import"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Validate every dataset config loads
+        run: |
+          fail=0
+          for cfg in configs/datasets/*.yaml configs/_validation/*.yaml; do
+            [[ "$(basename $cfg)" == _template_* ]] && continue
+            did=$(basename "$cfg" .yaml)
+            echo "▸ $did"
+            if ! DATASET="$did" python -c "
+import sys; sys.path.insert(0,'scripts')
+from dataset_config import load_config
+dc = load_config('$did')
+assert dc.dataset_id == '$did', f'id mismatch in $cfg'
+print(f'  ok — modality={dc.modality}')"; then
+              fail=1
+            fi
+          done
+          exit $fail
