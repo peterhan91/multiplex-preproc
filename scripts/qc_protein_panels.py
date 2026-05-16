@@ -14,26 +14,10 @@ import numpy as np
 from PIL import Image
 
 from _common import get_logger, load_config
+from mosaics import overlay_channel, to_u8
 from panels import GREENWALD_PANEL
 
 log = get_logger("panels")
-
-
-def _to_u8(arr: np.ndarray, lo_p: float = 1.0, hi_p: float = 99.5) -> np.ndarray:
-    a = arr.astype(np.float32)
-    lo, hi = np.percentile(a, [lo_p, hi_p])
-    if hi <= lo:
-        hi = lo + 1.0
-    return (np.clip((a - lo) / (hi - lo), 0, 1) * 255).astype(np.uint8)
-
-
-def _overlay(he_rgb: np.ndarray, ch_u8: np.ndarray, color=(0, 255, 255), alpha: float = 0.6) -> np.ndarray:
-    color_arr = np.zeros_like(he_rgb)
-    color_arr[..., 0] = (ch_u8 * (color[0] / 255.0)).astype(np.uint8)
-    color_arr[..., 1] = (ch_u8 * (color[1] / 255.0)).astype(np.uint8)
-    color_arr[..., 2] = (ch_u8 * (color[2] / 255.0)).astype(np.uint8)
-    blend = np.clip(he_rgb.astype(np.uint16) + (color_arr.astype(np.uint16) * alpha).astype(np.uint16), 0, 255)
-    return blend.astype(np.uint8)
 
 
 def panel_for_channel(
@@ -50,9 +34,9 @@ def panel_for_channel(
         for i in patch_indices[r0 : r0 + cols]:
             he_p = he[i]
             ch = codex[i, chan_idx]
-            ch_u8 = _to_u8(ch)
+            ch_u8 = to_u8(ch)
             ch_rgb = np.stack([ch_u8] * 3, axis=-1)
-            ovl = _overlay(he_p, ch_u8)
+            ovl = overlay_channel(he_p, ch_u8)
             tile = np.hstack([he_p, ch_rgb, ovl])
             row.append(tile)
         if row:

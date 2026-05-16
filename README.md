@@ -33,6 +33,24 @@ Outputs land at `preproc/<dataset>/`. Run with:
 DATASET=greenwald-gbm-codex PY=~/miniforge3/envs/gbm-preproc/bin/python bash run_pipeline.sh
 ```
 
+To regenerate the preview montage shown in the prompt — an 8 × 8 grid of
+`[H&E | DAPI grayscale | H&E + cyan DAPI overlay]` tiles from
+`preproc/greenwald-gbm-codex/patches/ZH1041_T1.h5` — run:
+
+```bash
+DATASET=greenwald-gbm-codex ~/miniforge3/envs/gbm-preproc/bin/python \
+  scripts/render_patch_mosaic.py --sample ZH1041_T1 --channel 0 --max-width 2048
+```
+
+The same command is available as:
+
+```bash
+make preview PY=~/miniforge3/envs/gbm-preproc/bin/python
+```
+
+Standalone preview outputs are written under `results/mosaics/<dataset>/`.
+The larger pipeline cache remains under gitignored `preproc/<dataset>/`.
+
 GPU is optional — `04_patchify` falls back to scipy CPU when CUDA isn't
 available; `03_register` falls back from kornia LoFTR to skimage ORB. End-to-end
 on a single CODEX slide (43 channels, 11k × 11k full-res) is ~80 s on a single
@@ -78,6 +96,7 @@ reader + registration strategy.
 │   ├── panels.py                            # named panel registry (Greenwald + future)
 │   ├── 00_unpack.py / 01_index.py / 01b_panels.py / 02_thumbs.py
 │   ├── 03_register.py / 04_patchify.py
+│   ├── mosaics.py / render_patch_mosaic.py  # deterministic H&E/CODEX preview regeneration
 │   ├── qc_napari.py                         # interactive single-cell-resolution viewer
 │   └── qc_protein_panels.py                 # per-channel patch montages
 ├── raw/<dataset_id>/                        # downloaded artefacts (gitignored)

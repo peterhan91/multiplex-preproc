@@ -38,6 +38,7 @@ from _common import (
     load_config,
     load_index,
 )
+from mosaics import render_triptych_mosaic, save_png
 from readers import open_reader
 
 log = get_logger("patchify")
@@ -230,6 +231,7 @@ def patchify_one(sid: str, slide_meta: dict, dc) -> dict:
     STRIDE_PX = pcfg.get("stride_px", 512)
     TISSUE_FRAC_MIN = pcfg.get("tissue_frac_min", 0.35)
     MAX_PATCHES = pcfg.get("max_patches_per_slide", 256)
+    preview_grid = pcfg.get("preview_grid", PREVIEW_GRID)
     storage = pcfg.get("storage", {})
     he_dtype = storage.get("he_dtype", "uint8")
     codex_dtype = storage.get("codex_dtype", "uint8")
@@ -320,27 +322,13 @@ def patchify_one(sid: str, slide_meta: dict, dc) -> dict:
                     rate = (i + 1) / max(1e-3, (time.time() - t0))
                     log.info("    patch %d/%d (%.1f patches/s)", i, n, rate)
 
-    # 3-up preview (H&E | nuclear-ref | overlay) — use channel 0 as ref proxy
-    def _to_u8(a):
-        a = a.astype(np.float32)
-        lo, hi = np.percentile(a, [1, 99.5])
-        if hi <= lo: hi = lo + 1.0
-        return (np.clip((a - lo) / (hi - lo), 0, 1) * 255).astype(np.uint8)
-    rows = []
-    side = max(1, int(np.sqrt(min(len(previews), PREVIEW_GRID * PREVIEW_GRID))))
-    for r in range(side):
-        row = []
-        for c in range(side):
-            idx = r * side + c
-            if idx >= len(previews): break
-            he_p, co_p = previews[idx]
-            d_u8 = _to_u8(co_p[0])
-            d_rgb = np.stack([np.zeros_like(d_u8), d_u8, d_u8], axis=-1)  # cyan
-            blend = np.clip(he_p.astype(np.uint16) + (d_rgb.astype(np.uint16) * 0.6).astype(np.uint16), 0, 255).astype(np.uint8)
-            row.append(np.hstack([he_p, np.stack([d_u8] * 3, axis=-1), blend]))
-        if row: rows.append(np.hstack(row))
-    if rows:
-        Image.fromarray(np.vstack(rows)).save(dc.patches_dir / f"{sid}_preview.png")
+    # 3-up preview (H&E | nuclear-ref | overlay) — use channel 0 as ref proxy.
+    if previews:
+        side = max(1, int(np.sqrt(min(len(previews), preview_grid * preview_grid))))
+        he_preview = [he_p for he_p, _ in previews[: side * side]]
+        ch_preview = [co_p[0] for _, co_p in previews[: side * side]]
+        mosaic = render_triptych_mosaic(he_preview, ch_preview, cols=side)
+        save_png(mosaic, dc.patches_dir / f"{sid}_preview.png")
 
     cube.close(); he.close()
     return {"sample_id": sid, "ok": True, "n_patches": n,
