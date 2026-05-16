@@ -46,15 +46,11 @@ jobs:
         run: |
           fail=0
           for cfg in configs/datasets/*.yaml configs/_validation/*.yaml; do
-            [[ "$(basename $cfg)" == _template_* ]] && continue
-            did=$(basename "$cfg" .yaml)
+            bn=$(basename "$cfg")
+            [[ "$bn" == _template_* ]] && continue
+            did="${bn%.yaml}"
             echo "▸ $did"
-            if ! DATASET="$did" python -c "
-import sys; sys.path.insert(0,'scripts')
-from dataset_config import load_config
-dc = load_config('$did')
-assert dc.dataset_id == '$did', f'id mismatch in $cfg'
-print(f'  ok — modality={dc.modality}')"; then
+            if ! DATASET="$did" python -c "import sys; sys.path.insert(0,'scripts'); from dataset_config import load_config; dc = load_config('$did'); assert dc.dataset_id == '$did'; print(f'  ok — modality={dc.modality}')"; then
               fail=1
             fi
           done
